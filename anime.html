@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>JUMPING JACK</title>
+<style>
+html, body { margin:0; padding:0; overflow:hidden; background:black; font-family:sans-serif; }
+canvas { display:block; }
+#score, #level { position:absolute; color:white; font-size:28px; font-weight:bold; z-index:10; }
+#score { top:20px; left:20px; }
+#level { top:20px; right:20px; }
+.screen {
+  position: absolute; top:0; left:0; width:100%; height:100%;
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  background: rgba(0,0,0,0.9); z-index:20;
+  font-family: 'Comic Sans MS', 'Segoe UI', sans-serif; /* Anime/cartoonish font */
+}
+
+.screen h1 {
+  font-size: 60px;
+  margin-bottom: 50px;
+  color: #00ffff; /* Cyan color for title */
+  text-shadow: 2px 2px 8px #000;
+}
+
+.screen button {
+  margin: 15px;
+  padding: 20px 60px;
+  font-size: 26px;
+  border: 3px solid #00ffff;
+  border-radius: 15px;
+  background: linear-gradient(45deg, #ff4081, #ff80ab);
+  color: #fff;
+  cursor: pointer;
+  transition: 0.3s;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+  font-weight: bold;
+}
+
+.screen button:hover {
+  transform: scale(1.15);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.7);
+  background: linear-gradient(45deg, #00ffff, #00ffcc);
+}
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+<div id="score">Score: 0</div>
+<div id="level">Level: Space</div>
+
+<!-- Home Screen -->
+<div id="homeScreen" class="screen">
+  <h1 style="color:cyan;">JUMPING JACK</h1>
+  <button onclick="showDifficultyScreen()">Start Game</button>
+  <div style="margin-top:40px; width:60%; text-align:center; font-size:20px;">
+    <h2>About JUMPING JACK</h2>
+    <p>Jumping Jack is an anime-style runner game. Control your character across multiple levels like Space, Snow, Forest, Desert, and Cyber City. Avoid obstacles, collect points, and enjoy level-specific animations!</p>
+  </div>
+</div>
+
+<!-- Difficulty Selection -->
+<div id="difficultyScreen" class="screen" style="display:none;">
+  <h1>Select Difficulty</h1>
+  <button onclick="startGame('Easy')">Easy</button>
+  <button onclick="startGame('Normal')">Normal</button>
+  <button onclick="startGame('Hard')">Hard</button>
+  <button onclick="startGame('Extreme')">Extreme</button>
+</div>
+
+<!-- Game Over -->
+<div id="gameOverScreen" class="screen" style="display:none;">
+  <h1>💀 Game Over 💀</h1>
+  <div id="finalScore">Score: 0</div>
+  <button onclick="restartGame()">Retry</button>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const groundHeight = 80;
+
+// Runner
+let runner = {x:150, y:0, width:60, height:100, dy:0, gravity:1, jumpForce:-18, isJumping:false};
+runner.y = canvas.height - groundHeight - runner.height;
+
+let obstacles = [], particles = [];
+let score = 0, gameRunning = false, levelIndex = 0, difficulty = 'Normal';
+let obstacleSpeed = 8, spawnRate = 1500, lastSpawn = 0;
+
+// Levels
+const levels = [
+  {name:"Space", bg:"#000011"},
+  {name:"Snow", bg:"#aeeeee"},
+  {name:"Forest", bg:"#225500"},
+  {name:"Desert", bg:"#f4c542"},
+  {name:"Cyber City", bg:"#050016"}
+];
+
+// Runner & obstacle images
+const runnerSprite = new Image();
+runnerSprite.src = "runner.png"; // replace with your runner PNG
+
+const obstacleImg = new Image();
+obstacleImg.src = "fence.png"; // replace with your obstacle PNG
+
+// Level-specific particles
+const spaceStars=[], snowflakes=[], leaves=[], dust=[], neonLights=[];
+for(let i=0;i<200;i++) spaceStars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*1.5+0.5,speed:Math.random()*0.5+0.2});
+for(let i=0;i<150;i++) snowflakes.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*2+1,speed:Math.random()*1+0.5});
+for(let i=0;i<100;i++) leaves.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*3+2,speed:Math.random()*1+0.5});
+for(let i=0;i<100;i++) dust.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*2+1,speed:Math.random()*0.5+0.2});
+for(let i=0;i<50;i++) neonLights.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,width:Math.random()*10+5,height:Math.random()*40+20,color:`hsl(${Math.random()*360},100%,50%)`,dy:Math.random()*0.5+0.2});
+
+// Controls
+window.addEventListener("keydown",(e)=>{if(e.code=="Space"&&!runner.isJumping){runner.dy=runner.jumpForce;runner.isJumping=true; spawnParticles(runner.x+runner.width/2,runner.y+runner.height,"#fff");}});
+canvas.addEventListener("touchstart",(e)=>{if(!runner.isJumping){runner.dy=runner.jumpForce;runner.isJumping=true; spawnParticles(runner.x+runner.width/2,runner.y+runner.height,"#fff");}});
+
+// Particles
+function spawnParticles(x,y,color){for(let i=0;i<5;i++){particles.push({x:x,y:y,dx:(Math.random()-0.5)*4,dy:(Math.random()-1.5)*4,life:30,color:color});}}
+
+// Spawn obstacle
+function spawnObstacle(){
+  const width = Math.random()*60+70;
+  const height = Math.random()*50+70;
+  const y = canvas.height - groundHeight - height +5;
+  obstacles.push({x:canvas.width+width,y:y,width:width,height:height});
+}
+
+// Draw runner
+function drawRunner(){
+  if(runnerSprite.complete && runnerSprite.naturalWidth>0){ctx.drawImage(runnerSprite,runner.x,runner.y,runner.width,runner.height);}
+  else {ctx.fillStyle="#ff0044";ctx.fillRect(runner.x,runner.y,runner.width,runner.height);}
+}
+
+// Level backgrounds
+function drawLevelBackground(levelName){
+  switch(levelName){
+    case "Space":
+      ctx.fillStyle="white"; spaceStars.forEach(s=>{ctx.beginPath();ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);ctx.fill(); s.y+=s.speed;if(s.y>canvas.height)s.y=0;});
+      break;
+    case "Snow":
+      ctx.fillStyle="white"; snowflakes.forEach(s=>{ctx.beginPath();ctx.arc(s.x,s.y,s.radius,0,Math.PI*2);ctx.fill(); s.y+=s.speed;if(s.y>canvas.height)s.y=0;});
+      break;
+    case "Forest":
+      ctx.fillStyle="green"; leaves.forEach(l=>{ctx.beginPath();ctx.arc(l.x,l.y,l.radius,0,Math.PI*2);ctx.fill(); l.y+=l.speed;if(l.y>canvas.height)l.y=0;});
+      break;
+    case "Desert":
+      ctx.fillStyle="orange"; dust.forEach(d=>{ctx.beginPath();ctx.arc(d.x,d.y,d.radius,0,Math.PI*2);ctx.fill(); d.y+=d.speed;if(d.y>canvas.height)d.y=0;});
+      break;
+    case "Cyber City":
+      neonLights.forEach(n=>{ctx.fillStyle=n.color;ctx.fillRect(n.x,n.y,n.width,n.height); n.y+=n.dy;if(n.y>canvas.height)n.y=0;});
+      break;
+  }
+}
+
+// Game loop
+function gameLoop(timestamp){
+  if(!gameRunning) return;
+  if(!lastSpawn) lastSpawn=timestamp;
+  if(timestamp-lastSpawn>spawnRate){spawnObstacle(); lastSpawn=timestamp;}
+
+  const level = levels[levelIndex];
+
+  // Background & ground
+  ctx.fillStyle = level.bg; ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawLevelBackground(level.name);
+  ctx.fillStyle="#555"; ctx.fillRect(0,canvas.height-groundHeight,canvas.width,groundHeight);
+
+  // Runner physics
+  runner.dy+=runner.gravity; runner.y+=runner.dy;
+  if(runner.y>=canvas.height-groundHeight-runner.height){runner.y=canvas.height-groundHeight-runner.height; runner.isJumping=false;}
+  drawRunner();
+
+  // Obstacles
+  obstacles.forEach((o,i)=>{
+    o.x-=obstacleSpeed;
+    if(obstacleImg.complete && obstacleImg.naturalWidth>0) ctx.drawImage(obstacleImg,o.x,o.y,o.width,o.height);
+    else {ctx.fillStyle="#ff0000";ctx.fillRect(o.x,o.y,o.width,o.height);}
+    if(runner.x<o.x+o.width && runner.x+runner.width>o.x && runner.y<o.y+o.height && runner.y+runner.height>o.y){endGame();}
+    if(o.x+o.width<0) obstacles.splice(i,1);
+  });
+
+  // Particles
+  particles.forEach((p,i)=>{p.x+=p.dx;p.y+=p.dy;p.life--;ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,3,3); if(p.life<=0) particles.splice(i,1);});
+
+  // Score & level
+  score++; document.getElementById("score").innerText="Score: "+score;
+  if(score%2000===0){levelIndex=(levelIndex+1)%levels.length; document.getElementById("level").innerText="Level: "+levels[levelIndex].name;}
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Screens
+function showDifficultyScreen(){document.getElementById("homeScreen").style.display="none"; document.getElementById("difficultyScreen").style.display="flex";}
+function startGame(selectedDifficulty){
+  difficulty=selectedDifficulty;
+  switch(difficulty){case"Easy":obstacleSpeed=6;spawnRate=2000;break; case"Normal":obstacleSpeed=8;spawnRate=1500;break; case"Hard":obstacleSpeed=12;spawnRate=1000;break; case"Extreme":obstacleSpeed=18;spawnRate=700;break;}
+  document.getElementById("difficultyScreen").style.display="none"; gameRunning=true; score=0; obstacles=[]; particles=[]; gameLoop();
+}
+function endGame(){gameRunning=false; document.getElementById("finalScore").innerText="Score: "+score; document.getElementById("gameOverScreen").style.display="flex";}
+function restartGame(){document.getElementById("gameOverScreen").style.display="none"; document.getElementById("homeScreen").style.display="flex";}
+
+// For local file
+runnerSprite.src = "png-clipart-character-animation-running-runner-running-cartoon-thumbnail-removebg-preview.png";
+runner.width = 150;   // frame width
+runner.height = 150; // frame height
+
+</script>
+</body>
+</html>

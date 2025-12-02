@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Teleporting Start Button Troll</title>
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+  font-family: 'Comic Sans MS', sans-serif;
+  cursor: none; /* Hide default cursor for better anime feel */
+}
+canvas { display: block; }
+
+#startButton {
+  position: absolute;
+  padding: 20px 50px;
+  font-size: 24px;
+  background: linear-gradient(45deg,#00ffff,#ff00ff);
+  color: black;
+  border: 3px solid #fff;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.5s ease;
+  text-shadow: 1px 1px 5px #000;
+  z-index: 10;
+  box-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff;
+}
+#startButton:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 30px #00ffff, 0 0 60px #ff00ff, 0 0 10px #ffffff;
+}
+
+h1 {
+  position: absolute;
+  top: 20%;
+  width: 100%;
+  text-align: center;
+  color: cyan;
+  font-size: 60px;
+  text-shadow: 2px 2px 10px #000;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<h1>Welcome to Space Troll!</h1>
+<button id="startButton">Start Game</button>
+
+<script>
+// Canvas
+const canvas = document.getElementById("stars");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// Stars
+const stars = [];
+for(let i=0;i<200;i++){
+  stars.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, radius:Math.random()*1.5+0.5, speed:Math.random()*0.5+0.2, twinkle: Math.random()});
+}
+
+// Shooting stars
+const shootingStars = [];
+
+// Sparkles
+let sparkles = [];
+
+// Mouse particles
+let mouseParticles = [];
+let mouse = {x:canvas.width/2, y:canvas.height/2};
+document.addEventListener('mousemove', e=>{mouse.x=e.clientX; mouse.y=e.clientY;});
+
+function animateStars(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Normal stars
+  for(let star of stars){
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.radius + Math.sin(star.twinkle*10)*0.5, 0, Math.PI*2);
+    ctx.fillStyle = "white";
+    ctx.fill();
+    star.y += star.speed;
+    star.twinkle += 0.02;
+    if(star.y>canvas.height) star.y=0;
+  }
+
+  // Shooting stars
+  if(Math.random()<0.01) {
+    shootingStars.push({x:0, y:Math.random()*canvas.height/2, length: Math.random()*200+100, speed: Math.random()*8+6});
+  }
+  for(let i=shootingStars.length-1;i>=0;i--){
+    const s = shootingStars[i];
+    ctx.strokeStyle="white";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(s.x+s.length, s.y+s.length/5);
+    ctx.stroke();
+    s.x += s.speed;
+    if(s.x>canvas.width) shootingStars.splice(i,1);
+  }
+
+  // Sparkles
+  for(let i=sparkles.length-1;i>=0;i--){
+    const sp = sparkles[i];
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, sp.size, 0, Math.PI*2);
+    ctx.fillStyle = sp.color;
+    ctx.fill();
+    sp.life -=1;
+    sp.size *= 0.95;
+    if(sp.life<=0) sparkles.splice(i,1);
+  }
+
+  // Mouse particles
+  mouseParticles.push({x:mouse.x, y:mouse.y, size:Math.random()*4+2, life:30, color:'#00ffff'});
+  for(let i=mouseParticles.length-1;i>=0;i--){
+    const p = mouseParticles[i];
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    p.life--;
+    p.size *=0.95;
+    if(p.life<=0) mouseParticles.splice(i,1);
+  }
+
+  requestAnimationFrame(animateStars);
+}
+animateStars();
+
+// Start button
+const startBtn = document.getElementById("startButton");
+startBtn.style.left = (window.innerWidth/2 - startBtn.offsetWidth/2) + "px";
+startBtn.style.top = (window.innerHeight/2 - startBtn.offsetHeight/2) + "px";
+
+let teleportCount = 0;
+const maxTeleports = 5;
+
+function wiggleButton(){
+  let angle = 0;
+  const wiggleInterval = setInterval(()=>{
+    startBtn.style.transform = `rotate(${Math.sin(angle)*15}deg) scale(1.1)`;
+    angle += 0.3;
+    if(angle>6.3){
+      clearInterval(wiggleInterval);
+      startBtn.style.transform="scale(1.1)";
+    }
+  },16);
+}
+
+function createSparkles(x,y){
+  for(let i=0;i<10;i++){
+    sparkles.push({
+      x: x + (Math.random()*40-20),
+      y: y + (Math.random()*40-20),
+      size: Math.random()*4+2,
+      life: 30,
+      color: ['#00ffff','#ff00ff','#ffff00'][Math.floor(Math.random()*3)]
+    });
+  }
+}
+
+startBtn.addEventListener("mouseenter", ()=>{
+  if(teleportCount < maxTeleports){
+    wiggleButton();
+    const newX = Math.random()*(window.innerWidth - startBtn.offsetWidth);
+    const newY = Math.random()*(window.innerHeight - startBtn.offsetHeight);
+    createSparkles(parseInt(startBtn.style.left), parseInt(startBtn.style.top));
+    startBtn.style.left = newX + "px";
+    startBtn.style.top = newY + "px";
+    teleportCount++;
+  }
+});
+
+// Redirect after max teleports
+startBtn.addEventListener("click", ()=>{
+  if(teleportCount >= maxTeleports){
+    window.location.href = "anime.html";
+  }
+});
+
+// Resize canvas
+window.addEventListener("resize", ()=>{
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+
+</body>
+</html>
